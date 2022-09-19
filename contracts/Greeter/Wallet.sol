@@ -21,6 +21,7 @@ contract Wallet {
         string autoExecuteFunctionHeader;
         string[] autoExecuteCalldata;
     }
+    
     mapping (address => bool) public isApprovedToSetBlacklist;
     mapping (address => Blacklist) public blacklistedAction;
     mapping (address => BlacklistAutoExecute) public blacklistedActionAutoExecute;
