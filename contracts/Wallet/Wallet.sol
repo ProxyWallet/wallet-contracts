@@ -7,7 +7,7 @@ import "hardhat/console.sol";
 contract Wallet {
     address public owner;
 
-    event blacklistedActionsSetted( 
+    event blacklistedActionsSetted(
         address _blacklistedTo,
         bytes blacklistActionBytes,
         uint256 _expiryBlock,
@@ -15,9 +15,7 @@ contract Wallet {
         bytes autoExecuteActionBytes
     );
 
-    event ApproveForConfiguration(
-        address approvedTo
-    );
+    event ApproveForConfiguration(address approvedTo);
 
     constructor(address _owner) {
         owner = _owner;
@@ -35,9 +33,9 @@ contract Wallet {
     }
 
     mapping(address => bool) public isApprovedToSetBlacklist;
-    mapping(address => Blacklist) public blacklistedAction;
-    mapping(address => BlacklistAutoExecute)
-        public blacklistedActionAutoExecute;
+    mapping(address => mapping(bytes => Blacklist)) public blacklistedAction;
+    mapping(address => mapping(bytes => BlacklistAutoExecute)) public blacklistedActionAutoExecute;
+
 
     function setBlacklistedActions(
         address _blacklistedTo,
@@ -46,24 +44,23 @@ contract Wallet {
         address _autoExecuteTo,
         bytes calldata _autoExecuteActionBytes
     ) public onlyApproved {
-
-        blacklistedAction[_blacklistedTo] = Blacklist({
+        blacklistedAction[_blacklistedTo][_blacklistActionBytes] = Blacklist({
             blacklistedTo: _blacklistedTo,
-            blacklistActionBytes:_blacklistActionBytes,
+            blacklistActionBytes: _blacklistActionBytes,
             isBlacklisted: true
         });
 
-        blacklistedActionAutoExecute[_autoExecuteTo] = BlacklistAutoExecute({
+        blacklistedActionAutoExecute[_autoExecuteTo][_autoExecuteActionBytes] = BlacklistAutoExecute({
             expiryBlock: _expiryBlock,
             autoExecuteTo: _autoExecuteTo,
-            autoExecuteActionBytes:_autoExecuteActionBytes
+            autoExecuteActionBytes: _autoExecuteActionBytes
         });
 
         emit blacklistedActionsSetted(
             _blacklistedTo,
-            _blacklistActionBytes,   
+            _blacklistActionBytes,
             _expiryBlock,
-            _autoExecuteTo,        
+            _autoExecuteTo,
             _autoExecuteActionBytes
         );
     }
@@ -81,31 +78,27 @@ contract Wallet {
 
     function ApproveForConfigure(address _approveAddress) public onlyOwner {
         isApprovedToSetBlacklist[_approveAddress] = true;
-        
+
         emit ApproveForConfiguration(_approveAddress);
     }
 
-    function makeTransaction(
-        address _to,
-        bytes memory callBytes
-    ) public onlyOwner {
-        Blacklist memory blacklistAction = blacklistedAction[_to];
+    function makeTransaction(address _to, bytes memory callBytes)
+        public
+        onlyOwner
+    {
+        Blacklist memory blacklistAction = blacklistedAction[_to][callBytes];
 
         require(!blacklistAction.isBlacklisted, "not allowed");
 
-        (bool success, bytes memory data) = _to.call(
-            callBytes
-        );
+        (bool success, bytes memory data) = _to.call(callBytes);
         require(success, "!success");
 
         //emit data
     }
 
-    function autoExecuteTo(address _autoExecuteTo) public {
+    function autoExecuteTo(address _autoExecuteTo,bytes calldata _autoExecuteActionBytes) public {
         BlacklistAutoExecute
-            storage blacklistAction = blacklistedActionAutoExecute[
-                _autoExecuteTo
-            ];
+            storage blacklistAction = blacklistedActionAutoExecute[_autoExecuteTo][_autoExecuteActionBytes];
 
         require(block.number > blacklistAction.expiryBlock, "!expired");
 

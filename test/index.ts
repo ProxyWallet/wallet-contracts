@@ -207,7 +207,7 @@ describe('Wallet', function () {
     ).to.emit('Wallet', 'blacklistedActionsSetted');
 
     await expect(
-      walletContract.autoExecuteTo(autoExecuteTo),
+      walletContract.autoExecuteTo(autoExecuteTo, autoExecuteActionBytes),
     ).to.be.revertedWith('expired');
   });
 
@@ -241,7 +241,7 @@ describe('Wallet', function () {
     ).to.emit('Wallet', 'blacklistedActionsSetted');
 
     await ethers.provider.send('hardhat_mine', ['0x100']);
-    await walletContract.autoExecuteTo(autoExecuteTo);
+    await walletContract.autoExecuteTo(autoExecuteTo, autoExecuteActionBytes);
 
     expect(await blacklistedContract.count()).to.be.eq(10);
   });
