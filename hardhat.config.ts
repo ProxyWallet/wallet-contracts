@@ -13,6 +13,7 @@ import {
   getNetworkConfig,
 } from './config';
 import './tasks';
+import '@nomiclabs/hardhat-ethers';
 
 dotenv.config();
 

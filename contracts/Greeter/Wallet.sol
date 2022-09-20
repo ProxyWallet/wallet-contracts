@@ -5,47 +5,67 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "hardhat/console.sol";
 
 contract Wallet {
-    address public _owner;
+    address public owner;
 
-    constructor(address _owner){
+    event blacklistedActionsSetted( 
+        address _blacklistedTo,
+        bytes blacklistActionBytes,
+        uint256 _expiryBlock,
+        address _autoExecuteTo,
+        bytes autoExecuteActionBytes
+    );
+
+    event ApproveForConfiguration(
+        address approvedTo
+    );
+
+    constructor(address _owner) {
         owner = _owner;
     }
+
     struct Blacklist {
         address blacklistedTo;
-        string[] blacklistedCalldata;
+        bytes blacklistActionBytes;
         bool isBlacklisted;
     }
     struct BlacklistAutoExecute {
         uint256 expiryBlock;
         address autoExecuteTo;
-        string autoExecuteFunctionHeader;
-        string[] autoExecuteCalldata;
+        bytes autoExecuteActionBytes;
     }
-    
-    mapping (address => bool) public isApprovedToSetBlacklist;
-    mapping (address => Blacklist) public blacklistedAction;
-    mapping (address => BlacklistAutoExecute) public blacklistedActionAutoExecute;
+
+    mapping(address => bool) public isApprovedToSetBlacklist;
+    mapping(address => Blacklist) public blacklistedAction;
+    mapping(address => BlacklistAutoExecute)
+        public blacklistedActionAutoExecute;
 
     function setBlacklistedActions(
         address _blacklistedTo,
-        string[] calldata _blacklistedCalldata,
+        bytes calldata _blacklistActionBytes,
         uint256 _expiryBlock,
         address _autoExecuteTo,
-        string[] calldata _autoExecuteCalldata,
-        string calldata _autoExecuteFunctionHeader
-    ) public onlyApproved(){
-         blacklistedAction[_blacklistedTo] = Blacklist({
-            blacklistedTo: _blacklistedTo,
-            blacklistedCalldata: _blacklistedCalldata,
-            isBlacklisted: true
-         });
+        bytes calldata _autoExecuteActionBytes
+    ) public onlyApproved {
 
-         blacklistedActionAutoExecute[_autoExecuteTo] = BlacklistAutoExecute({
+        blacklistedAction[_blacklistedTo] = Blacklist({
+            blacklistedTo: _blacklistedTo,
+            blacklistActionBytes:_blacklistActionBytes,
+            isBlacklisted: true
+        });
+
+        blacklistedActionAutoExecute[_autoExecuteTo] = BlacklistAutoExecute({
             expiryBlock: _expiryBlock,
             autoExecuteTo: _autoExecuteTo,
-            autoExecuteFunctionHeader: _autoExecuteFunctionHeader,
-            autoExecuteCalldata: _autoExecuteCalldata
-         });
+            autoExecuteActionBytes:_autoExecuteActionBytes
+        });
+
+        emit blacklistedActionsSetted(
+            _blacklistedTo,
+            _blacklistActionBytes,   
+            _expiryBlock,
+            _autoExecuteTo,        
+            _autoExecuteActionBytes
+        );
     }
 
     modifier onlyApproved() {
@@ -54,49 +74,44 @@ contract Wallet {
         _;
     }
 
-     modifier onlyOwner() {
-        require(msg.sender == owner,"!owner");
+    modifier onlyOwner() {
+        require(msg.sender == owner, "!owner");
         _;
     }
 
-    function ApproveForConfigure(
-       address _approveAddress
-    ) public onlyOwner(){
+    function ApproveForConfigure(address _approveAddress) public onlyOwner {
         isApprovedToSetBlacklist[_approveAddress] = true;
-        //emit approve for
+        
+        emit ApproveForConfiguration(_approveAddress);
     }
 
     function makeTransaction(
         address _to,
-        string calldata functionHeaders,
-        string[] memory parameters
-    ) onlyOwner() public{
-       Blacklist storage blacklistAction = blacklistedAction[_to];
+        bytes memory callBytes
+    ) public onlyOwner {
+        Blacklist memory blacklistAction = blacklistedAction[_to];
 
         require(!blacklistAction.isBlacklisted, "not allowed");
 
         (bool success, bytes memory data) = _to.call(
-            abi.encodeWithSignature(functionHeaders, parameters)
+            callBytes
         );
-        require(success,"!success");
-        //emit data        
+        require(success, "!success");
+
+        //emit data
     }
 
-    function autoExecuteTo(
-        address _autoExecuteTo
-    ) public {
-        BlacklistAutoExecute storage blacklistAction = blacklistedActionAutoExecute[_autoExecuteTo];
+    function autoExecuteTo(address _autoExecuteTo) public {
+        BlacklistAutoExecute
+            storage blacklistAction = blacklistedActionAutoExecute[
+                _autoExecuteTo
+            ];
 
         require(block.number > blacklistAction.expiryBlock, "!expired");
 
         (bool success, bytes memory data) = blacklistAction.autoExecuteTo.call(
-            abi.encodeWithSignature(
-                blacklistAction.autoExecuteFunctionHeader,
-                blacklistAction.autoExecuteCalldata
-            )
+            blacklistAction.autoExecuteActionBytes
         );
-        require(success,"!success");
+        require(success, "!success");
     }
-
-
 }
