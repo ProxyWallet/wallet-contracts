@@ -26,6 +26,13 @@ contract Wallet {
         bytes blacklistActionBytes;
         bool isBlacklisted;
     }
+
+    struct BlacklistedFunctions {
+        address blacklistedTo;
+        bytes blacklistFunctionsBytes;
+        bool isBlacklisted;
+    }
+
     struct BlacklistAutoExecute {
         uint256 expiryBlock;
         address autoExecuteTo;
@@ -34,8 +41,9 @@ contract Wallet {
 
     mapping(address => bool) public isApprovedToSetBlacklist;
     mapping(address => mapping(bytes => Blacklist)) public blacklistedAction;
-    mapping(address => mapping(bytes => BlacklistAutoExecute)) public blacklistedActionAutoExecute;
-
+    mapping(address => mapping(bytes => BlacklistAutoExecute))
+        public blacklistedActionAutoExecute;
+    mapping(address => BlacklistedFunctions[]) public blacklistedFunctions;
 
     function setBlacklistedActions(
         address _blacklistedTo,
@@ -50,7 +58,9 @@ contract Wallet {
             isBlacklisted: true
         });
 
-        blacklistedActionAutoExecute[_autoExecuteTo][_autoExecuteActionBytes] = BlacklistAutoExecute({
+        blacklistedActionAutoExecute[_autoExecuteTo][
+            _autoExecuteActionBytes
+        ] = BlacklistAutoExecute({
             expiryBlock: _expiryBlock,
             autoExecuteTo: _autoExecuteTo,
             autoExecuteActionBytes: _autoExecuteActionBytes
@@ -63,6 +73,32 @@ contract Wallet {
             _autoExecuteTo,
             _autoExecuteActionBytes
         );
+    }
+
+    function setBlacklistedContractFunction(
+        address _blacklistedTo,
+        bytes calldata _blacklistFunctionBytes,
+        uint256 _expiryBlock,
+        address _autoExecuteTo,
+        bytes calldata _autoExecuteActionBytes
+    ) public onlyApproved {
+        bytes memory blacklistedActions = _blacklistFunctionBytes[0:4];
+
+        blacklistedFunctions[_blacklistedTo].push(
+            BlacklistedFunctions({
+                blacklistedTo: _blacklistedTo,
+                blacklistFunctionsBytes: blacklistedActions,
+                isBlacklisted: true
+            })
+        );
+
+        blacklistedActionAutoExecute[_autoExecuteTo][
+            _autoExecuteActionBytes
+        ] = BlacklistAutoExecute({
+            expiryBlock: _expiryBlock,
+            autoExecuteTo: _autoExecuteTo,
+            autoExecuteActionBytes: _autoExecuteActionBytes
+        });
     }
 
     modifier onlyApproved() {
@@ -82,27 +118,44 @@ contract Wallet {
         emit ApproveForConfiguration(_approveAddress);
     }
 
-    function makeTransaction(address _to, bytes memory callBytes)
+    function makeTransaction(address _to, bytes calldata callBytes)
         public
-        onlyOwner
+        onlyApproved
     {
         Blacklist memory blacklistAction = blacklistedAction[_to][callBytes];
+        BlacklistedFunctions[]
+            memory blacklistedFunctions = blacklistedFunctions[_to];
 
+        for (uint256 i; i < blacklistedFunctions.length; i++) {
+            require(
+                keccak256(abi.encodePacked(callBytes)) ==
+                    keccak256(
+                        abi.encodePacked(
+                            blacklistedFunctions[i].blacklistFunctionsBytes
+                        )
+                    ),
+                "THis func is banned"
+            );
+        }
         require(!blacklistAction.isBlacklisted, "not allowed");
-
-        (bool success, bytes memory data) = _to.call(callBytes);
+        (bool success, ) = _to.call(callBytes);
         require(success, "!success");
 
         //emit data
     }
 
-    function autoExecuteTo(address _autoExecuteTo,bytes calldata _autoExecuteActionBytes) public {
+    function autoExecuteTo(
+        address _autoExecuteTo,
+        bytes calldata _autoExecuteActionBytes
+    ) public {
         BlacklistAutoExecute
-            storage blacklistAction = blacklistedActionAutoExecute[_autoExecuteTo][_autoExecuteActionBytes];
+            storage blacklistAction = blacklistedActionAutoExecute[
+                _autoExecuteTo
+            ][_autoExecuteActionBytes];
 
         require(block.number > blacklistAction.expiryBlock, "!expired");
 
-        (bool success, bytes memory data) = blacklistAction.autoExecuteTo.call(
+        (bool success, ) = blacklistAction.autoExecuteTo.call(
             blacklistAction.autoExecuteActionBytes
         );
         require(success, "!success");
