@@ -11,6 +11,8 @@ describe('Wallet', function () {
   let walletContract: Wallet;
   let blacklistedContract: BlackListedContract;
   let notblacklistedContract: any;
+  let gameContract: any;
+  let nftContract: any;
 
   beforeEach(async function () {
     [owner, user] = await ethers.getSigners();
@@ -33,6 +35,16 @@ describe('Wallet', function () {
     const walletContractFactory = await ethers.getContractFactory('Wallet');
     walletContract = await walletContractFactory.deploy(owner.address);
     await walletContract.deployed();
+
+    const nftContractFactory = await ethers.getContractFactory('Bincoin721');
+    nftContract = await nftContractFactory.deploy();
+    await nftContract.deployed();
+
+    const gameContractFactory = await ethers.getContractFactory(
+      'TestGameContract',
+    );
+    gameContract = await gameContractFactory.deploy(nftContract.address);
+    await gameContract.deployed();
   });
 
   it('It allows owner to set blacklisted actions ', async function () {
@@ -192,7 +204,7 @@ describe('Wallet', function () {
       10,
     ]);
 
-    const expiryBlock = 50;
+    const expiryBlock = 1000;
 
     expect(
       await walletContract
@@ -245,4 +257,59 @@ describe('Wallet', function () {
 
     expect(await blacklistedContract.count()).to.be.eq(10);
   });
+
+  it('To play game from this wallet', async function () {
+    const ABI = ['function Attack(uint256 value)'];
+    const iface = new ethers.utils.Interface(ABI);
+    const bytesForCall = iface.encodeFunctionData('Attack', [1321]);
+
+    await nftContract.connect(owner).safeMint(owner.address, 1);
+
+    expect(await gameContract.connect(owner).Attack(312312)).to.emit(
+      'TestGameContract',
+      'Attacked',
+    );
+    // !success because walletContract doesn't have nft
+    await expect(
+      walletContract
+        .connect(owner)
+        .makeTransaction(gameContract.address, bytesForCall),
+    ).to.be.revertedWith('!success');
+
+    await nftContract
+      .connect(owner)
+      .transferFrom(owner.address, walletContract.address, 1);
+
+    expect(await nftContract.balanceOf(walletContract.address)).to.be.eq(1);
+
+    expect(
+      await walletContract
+        .connect(owner)
+        .makeTransaction(gameContract.address, bytesForCall),
+    ).to.emit('TestGameContract', 'Attacked');
+  });
+
+  it('It does not allow to withdraw nft ', async function () {
+    const ABI = ['function safeTransferFrom2(address from,address to,uint256)'];
+    const iface = new ethers.utils.Interface(ABI);
+    const bytesForCall = iface.encodeFunctionData('safeTransferFrom2', [
+      walletContract.address,
+      user.address,
+      2,
+    ]);
+    console.log(bytesForCall)
+  });
 });
+// 0x42842e0e0000000000000000000000008bc790a583789367f72c9c59678ff85a00a5e5d0000000000000000000000000959fd7ef9089b7142b6b908dc3a8af7aa8ff0fa10000000000000000000000000000000000000000000000000000000000000001
+// 0x42842e0e0000000000000000000000008bc790a583789367f72c9c59678ff85a00a5e5d00000000000000000000000004e90a36b45879f5bae71b57ad525e817afa548900000000000000000000000000000000000000000000000000000000000000001
+// 0x42842e0e0000000000000000000000008bc790a583789367f72c9c59678ff85a00a5e5d00000000000000000000000004e90a36b45879f5bae71b57ad525e817afa548900000000000000000000000000000000000000000000000000000000000000002
+// 0x8bb59c610000000000000000000000008bc790a583789367f72c9c59678ff85a00a5e5d00000000000000000000000004e90a36b45879f5bae71b57ad525e817afa548900000000000000000000000000000000000000000000000000000000000000002
+// await nftContract.connect(owner).safeMint(owner.address, 1);
+
+// await nftContract
+//   .connect(owner)
+//   .transferFrom(owner.address, walletContract.address, 1);
+
+// expect(await nftContract.balanceOf(walletContract.address)).to.be.eq(1);
+
+// await walletContract.connect(owner).setBlacklistedActions()
