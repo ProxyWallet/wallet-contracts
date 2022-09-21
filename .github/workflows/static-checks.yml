@@ -88,5 +88,7 @@ jobs:
       - name: Install project dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         run: yarn
+      - name: Build typechain
+        run: yarn build
       - name: Test contracts
         run: yarn test
