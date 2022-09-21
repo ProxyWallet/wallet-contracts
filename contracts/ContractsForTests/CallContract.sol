@@ -8,12 +8,10 @@ contract BlackListedContract {
     event Incremented(uint256 currentValue);
 
     uint256 public count;
-    
-    function incrementCount(uint256 value) public{
+
+    function incrementCount(uint256 value) public {
         count = count + value;
 
         emit Incremented(count);
     }
-
-    
 }
