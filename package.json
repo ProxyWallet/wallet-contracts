@@ -74,6 +74,6 @@
   },
   "dependencies": {
     "@atixlabs/hardhat-time-n-mine": "^0.0.5",
-    "@openzeppelin/contracts": "^4.7.3"
+    "@openzeppelin/contracts": "^4.8.2"
   }
 }
